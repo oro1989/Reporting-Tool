@@ -9,5 +9,5 @@
 </li>
 <li>-start by running newsdata.py</li>
 <li>-The program will connect to news database and execute the quries to answer 3 question required by the project</li>
-<li>-The program uses Views that are intiates but not commited to the database</li>
+<li>-The program uses Views that it intiates but not commited to the database</li>
 <ul>
