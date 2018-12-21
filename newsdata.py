@@ -31,7 +31,7 @@ def query_top_articles(c):
     print('\nthe most popular three articles of all time are:')
     for i in range(3):
         print(str(i+1) + ': ' + rawData[i][0] + '---' +
-              str(rawData[i][1]) + ' views')
+              str(rawData[i][2]) + ' views')
     print('')
 
 
