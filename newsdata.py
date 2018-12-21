@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 import psycopg2
 
@@ -6,13 +6,23 @@ db = psycopg2.connect("dbname=news")
 c = db.cursor()
 
 
-def report1(c):
+def view_articles_views(c):
+    # Creates a view of total views of each article and the author
+    view_query = '''
+    CREATE VIEW articles_views AS
+        SELECT articles.slug, articles.author, count(*) AS views FROM articles
+        JOIN log ON (log.path = '/article/' || articles.slug)
+        GROUP BY articles.slug, articles.author
+        ORDER BY views desc;
+    '''
+    c.execute(view_query)
+    db.commit()
+
+
+def query_top_articles(c):
     # What are the most popular three articles of all time?
     query = '''
-    select path, count(*) as views from log
-    where status = '200 OK' and path != '/'
-    group by path
-    order by views desc
+    SELECT * FROM articles_views
     limit 3;
     '''
     c.execute(query)
@@ -20,34 +30,19 @@ def report1(c):
 
     print('\nthe most popular three articles of all time are:')
     for i in range(3):
-        print(str(i+1) + ': ' + rawData[i][0][9:] + '---' +
+        print(str(i+1) + ': ' + rawData[i][0] + '---' +
               str(rawData[i][1]) + ' views')
     print('')
 
 
-def report2(c):
+def query_top_authors(c):
     # Who are the most popular article authors of all time?
-    view_query = '''
-    create view articles_views as
-        select path, count(*) as views from log
-        where status = '200 OK' and path != '/'
-        group by path;
-    '''
-    c.execute(view_query)
-
-    view_query = '''
-    create view top_rank_ids as
-        select sum(articles_views.views) total_views, articles.author
-        from articles_views
-        join articles on (articles_views.path = '/article/' || articles.slug)
-        group by articles.author
-        order by total_views desc;
-    '''
-    c.execute(view_query)
 
     query = '''
-    select authors.name, top_rank_ids.total_views
-    from authors join top_rank_ids on authors.id = top_rank_ids.author;
+    SELECT authors.name, sum(articles_views.views) AS total_views
+    FROM authors JOIN articles_views ON authors.id = articles_views.author
+    GROUP BY articles_views.author, authors.name
+    ORDER BY total_views desc;
     '''
     c.execute(query)
     rawData = c.fetchall()
@@ -59,52 +54,40 @@ def report2(c):
     print('')
 
 
-def report3(c):
+def query_highErrorRate(c):
     # On which days did more than 1% of requests lead to errors?
 
-    view_query = '''
-    create view days_total as
-        select time::date, status, count(*)
-        from log
-        group by time::date, status;
-    '''
-    c.execute(view_query)
-
-    view_query = '''
-    create view ok_response as
-        select t.time, t.count ok
-        from days_total t
-        where t.status = '200 OK';
-    '''
-    c.execute(view_query)
-
-    view_query = '''
-    create view error_response as
-        select t.time, t.count error
-        from days_total t
-        where t.status = '404 NOT FOUND';
-    '''
-    c.execute(view_query)
-
     query = '''
-    select t1.time, t1.ok, t2.error
-    from ok_response as t1
-    join error_response as t2
-    on t1.time = t2.time
-    where (t1.ok / t2.error < 99);
+    SELECT subq.*,
+    round(1.0*subq.num_errors/subq.total_responses , 4) AS errors_percent
+    FROM(
+        SELECT date(l.time), COUNT(*) total_responses,
+        SUM((status = '404 NOT FOUND')::int) num_errors
+        FROM log l
+        GROUP BY date(l.time)
+    ) subq
+    WHERE ((1.0 * num_errors / total_responses) > 0.01);
     '''
     c.execute(query)
     rawData = c.fetchall()
 
     print('more than 1% of requests lead to errors on: ')
     for i in range(len(rawData)):
-        error_percent = 100.0 * rawData[i][2] / (rawData[i][2] + rawData[i][1])
+        error_percent = 100.0 * float(rawData[i][3])
         print(str(i+1) + ': ' +
               str(rawData[i][0]) + '---' +
-              str(round(error_percent, 2)) + ' % errors')
+              str(error_percent) + '% errors')
     print('')
 
-report1(c)
-report2(c)
-report3(c)
+# Create view articles_views if not already existing.
+try:
+    view_articles_views(c)
+except:
+    db.close()
+    db = psycopg2.connect("dbname=news")
+    c = db.cursor()
+
+query_top_articles(c)
+query_top_authors(c)
+query_highErrorRate(c)
 db.close()
