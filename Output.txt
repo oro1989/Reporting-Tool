@@ -10,4 +10,4 @@ the most popular article authors of all time:
 4: Markoff Chaney----84557 views
 
 more than 1% of requests lead to errors on:
-1: 2016-07-17---2.26 % errors
+1: 2016-07-17---2.26% errors
